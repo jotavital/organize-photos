@@ -6,74 +6,105 @@ import colors
 from datetime import datetime
 from progress.bar import ChargingBar
 from time import sleep
-from tkinter import Tk
+from tkinter import *
+from tkinter import ttk
 from tkinter.filedialog import askdirectory
 
-root = Tk()
-print("Aguardando seleção...")
-photosPath = askdirectory(title='Selecione a pasta onde estão as fotos')
-root.destroy()
 
-if photosPath == "":
-    print("Nenhuma pasta foi selecionada.")
-    exit()
+def ask_photos_path():
+    global selected_path
+    selected_path = askdirectory(title='Selecione a pasta onde estão as fotos')
+    selected_path_label.configure(fg="#000")
 
-print(f"{colors.bcolors.WARNING}Pasta selecionada: {photosPath}{colors.bcolors.ENDC}")
+    if selected_path == "":
+        selected_path_label.configure(fg="#FF0000")
+        files_path_text.set("Nenhuma pasta foi selecionada.")
+        files_found_text.set("")
+        return
 
-files = [
-    f for f in listdir(photosPath)
-    if isfile(join(photosPath, f))
-    and f.upper().endswith((".JPG", ".JPEG", ".PNG", ".GIF", ".MOV", ".MP4", ".AVI", ".JFIF", ".WEBP"))
-]
-totalFiles = len(files)
+    files_path_text.set(selected_path)
+    scan_for_files()
 
-if totalFiles == 0:
-    print(f"{colors.bcolors.DANGER}Não há arquivos na pasta selecionada.{colors.bcolors.ENDC}")
-    exit()
 
-decision = input(
-    f'{colors.bcolors.SUCCESS}{totalFiles} arquivos encontrados para processar, deseja continuar? (y/N) {colors.bcolors.ENDC}') or 'N'
+def scan_for_files():
+    files = [
+        f for f in listdir(selected_path)
+        if isfile(join(selected_path, f))
+           and f.upper().endswith((".JPG", ".JPEG", ".PNG", ".GIF", ".MOV", ".MP4", ".AVI", ".JFIF", ".WEBP"))
+    ]
+    total_files = len(files)
 
-if decision.upper() != 'Y':
-    print(f'{colors.bcolors.DANGER}Adeus...{colors.bcolors.ENDC}')
-    sys.exit()
+    if total_files == 0:
+        files_found_text.set("Não há arquivos na pasta selecionada.")
 
-bar = ChargingBar(f'Processando ', max=totalFiles)
-bar.color = "blue"
+    files_found_text.set(f"{total_files} arquivos encontrados.")
+    start_button['state'] = 'normal'
 
-filesRenamed = 0
-for fileName in files:
-    bar.bar_prefix = f'{fileName}  '
-    bar.suffix = f'%(percent)d%% {bar.elapsed}s'
 
-    filePath = f'{photosPath}/{fileName}'
-    fileExtension = splitext(filePath)[1]
-    file = Image.open(f'{filePath}')
-    exif = file.getexif()
-    file.close()
+def process_files():
+    start_button['state'] = "disabled"
+    print("ok")
 
-    if not exif:
-        print(f'{colors.bcolors.DANGER}ERRO: O arquivo {fileName} não contém o metadado. {colors.bcolors.ENDC}')
-        bar.next()
-        break
+    progress_bar = ttk.Progressbar(tk_root, orient='horizontal', mode='indeterminate', length=300)
+    progress_bar.pack()
+    progress_bar.start()
 
-    dateTaken = exif[306]
-    formattedDateTaken = datetime.strptime(dateTaken, '%Y:%m:%d %H:%M:%S')
-    formattedDateTaken = formattedDateTaken.strftime('%d-%m-%Y %H-%M-%S')
 
-    newFileName = f'{formattedDateTaken}{fileExtension}'
-    newFilePath = f'{photosPath}/{newFileName}'
+tk_root = Tk()
+tk_root.geometry('500x200')
+tk_root.resizable(False, False)
+tk_root.title("Organizar fotos")
 
-    repeatedFileCounter = 0
-    while isfile(newFilePath) == 1:
-        repeatedFileCounter += 1
-        newFileName = f'{formattedDateTaken}-{repeatedFileCounter}{fileExtension}'
-        newFilePath = f'{photosPath}/{newFileName}'
+selected_path = ''
+files_path_text = StringVar()
+files_found_text = StringVar()
 
-    rename(f'{filePath}', f'{newFilePath}')
-    filesRenamed += 1
-    sleep(0.1)
-    bar.next()
+Button(tk_root, text="Selecionar pasta", command=lambda: ask_photos_path()).pack()
+selected_path_label = Label(tk_root, textvariable=files_path_text)
+selected_path_label.pack()
+Label(tk_root, textvariable=files_found_text).pack()
+start_button = Button(tk_root, text="Iniciar", command=lambda: process_files())
+start_button['state'] = "disabled"
+start_button.pack()
 
-bar.finish()
-print(f"{colors.bcolors.SUCCESS}{filesRenamed} arquivos renomeados em {bar.elapsed} segundos.{colors.bcolors.ENDC}")
+tk_root.mainloop()
+
+# bar = ChargingBar(f'Processando ', max=1)
+# bar.color = "blue"
+#
+# files_renamed = 0
+# for file_name in files:
+#     bar.bar_prefix = f'{file_name}  '
+#     bar.suffix = f'%(percent)d%% {bar.elapsed}s'
+#
+#     file_path = f'{selected_path}/{file_name}'
+#     file_extension = splitext(file_path)[1]
+#     file = Image.open(f'{file_path}')
+#     exif = file.getexif()
+#     file.close()
+#
+#     if not exif:
+#         print(f'{colors.bcolors.DANGER}ERRO: O arquivo {file_name} não contém o metadado. {colors.bcolors.ENDC}')
+#         bar.next()
+#         break
+#
+#     date_taken = exif[306]
+#     formatted_date_taken = datetime.strptime(date_taken, '%Y:%m:%d %H:%M:%S')
+#     formatted_date_taken = formatted_date_taken.strftime('%d-%m-%Y %H-%M-%S')
+#
+#     new_file_name = f'{formatted_date_taken}{file_extension}'
+#     new_file_path = f'{selected_path}/{new_file_name}'
+#
+#     repeated_file_counter = 0
+#     while isfile(new_file_path) == 1:
+#         repeated_file_counter += 1
+#         new_file_name = f'{formatted_date_taken}-{repeated_file_counter}{file_extension}'
+#         new_file_path = f'{selected_path}/{new_file_name}'
+#
+#     rename(f'{file_path}', f'{new_file_path}')
+#     files_renamed += 1
+#     sleep(0.1)
+#     bar.next()
+#
+# bar.finish()
+# print(f"{colors.bcolors.SUCCESS}{files_renamed} arquivos renomeados em {bar.elapsed} segundos.{colors.bcolors.ENDC}")
