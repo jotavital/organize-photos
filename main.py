@@ -1,21 +1,41 @@
 import sys
-from os import listdir, rename, system
+from os import listdir, rename
 from os.path import isfile, join, splitext
 from PIL import Image
 import colors
 from datetime import datetime
 from progress.bar import ChargingBar
 from time import sleep
+from tkinter import Tk
+from tkinter.filedialog import askdirectory
 
-photosPath = 'C:\\Users\\picle\\Desktop\\organize-photos\\example-photos'
-files = [f for f in listdir(photosPath) if isfile(join(photosPath, f))]
+root = Tk()
+print("Aguardando seleção...")
+photosPath = askdirectory(title='Selecione a pasta onde estão as fotos')
+root.destroy()
+
+if photosPath == "":
+    print("Nenhuma pasta foi selecionada.")
+    exit()
+
+print(f"{colors.bcolors.WARNING}Pasta selecionada: {photosPath}{colors.bcolors.ENDC}")
+
+files = [
+    f for f in listdir(photosPath)
+    if isfile(join(photosPath, f))
+    and f.upper().endswith((".JPG", ".JPEG", ".PNG", ".GIF", ".MOV", ".MP4", ".AVI", ".JFIF", ".WEBP"))
+]
 totalFiles = len(files)
 
+if totalFiles == 0:
+    print(f"{colors.bcolors.DANGER}Não há arquivos na pasta selecionada.{colors.bcolors.ENDC}")
+    exit()
+
 decision = input(
-    f'{colors.bcolors.WARNING}{totalFiles} arquivos encontrados para processar, deseja continuar? (Y/n) {colors.bcolors.ENDC}') or 'Y'
+    f'{colors.bcolors.SUCCESS}{totalFiles} arquivos encontrados para processar, deseja continuar? (y/N) {colors.bcolors.ENDC}') or 'N'
 
 if decision.upper() != 'Y':
-    print(f'{colors.bcolors.DANGER}Adeus...')
+    print(f'{colors.bcolors.DANGER}Adeus...{colors.bcolors.ENDC}')
     sys.exit()
 
 bar = ChargingBar(f'Processando ', max=totalFiles)
@@ -23,7 +43,7 @@ bar.color = "blue"
 
 filesRenamed = 0
 for fileName in files:
-    bar.bar_prefix = f'{fileName}...'
+    bar.bar_prefix = f'{fileName}  '
     bar.suffix = f'%(percent)d%% {bar.elapsed}s'
 
     filePath = f'{photosPath}/{fileName}'
@@ -52,7 +72,7 @@ for fileName in files:
 
     rename(f'{filePath}', f'{newFilePath}')
     filesRenamed += 1
-    sleep(0.5)
+    sleep(0.1)
     bar.next()
 
 bar.finish()
