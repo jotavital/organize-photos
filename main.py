@@ -11,7 +11,11 @@ from tkinter.filedialog import askdirectory
 
 
 def ask_files_path():
+    search_files_button['state'] = "disabled"
     global selected_path
+    global files_found_text
+
+    start_button['state'] = 'disabled'
     selected_path = askdirectory(title='Selecione a pasta onde estão as fotos')
     selected_path_label.configure(fg="#000")
 
@@ -22,23 +26,41 @@ def ask_files_path():
         return
 
     files_path_text.set(selected_path)
-    scan_selected_path()
+    files_found_text.set('')
+    search_files_button['state'] = "normal"
 
 
 def scan_selected_path():
     global files
+    global total_files
+
+    extensions_to_process = []
+
+    # código duplicado, transformar em funcao
+    for c, t in enumerate(selected_extensions):
+        if t.get():
+            extensions_to_process.append(extension_options[c])
+
+    if len(extensions_to_process) == 0:
+        files_found_label.configure(fg="red")
+        files_found_text.set("Selecione ao menos um formato!")
+        return
+
+    final_message.set("")
+
     files = [
         f for f in listdir(selected_path)
         if isfile(join(selected_path, f))
            and f.upper().endswith((".JPG", ".JPEG", ".PNG", ".GIF", ".MOV", ".MP4", ".AVI", ".JFIF", ".WEBP"))
     ]
 
-    global total_files
     total_files = len(files)
 
     if total_files == 0:
-        files_found_text.set("Não há arquivos na pasta selecionada.")
+        files_found_label.configure(fg="red")
+        files_found_text.set("Não encontramos na pasta selecionada.")
 
+    files_found_label.configure(fg="#008f00")
     files_found_text.set(f"{total_files} arquivos encontrados.")
     start_button['state'] = 'normal'
 
@@ -49,31 +71,27 @@ def process_files():
     global current_file
     global progress_frame
     global progress_bar
+    global selected_extensions
+
+    extensions_to_process = []
+
+    for c, t in enumerate(selected_extensions):
+        if t.get():
+            extensions_to_process.append(extension_options[c])
+
+    if len(extensions_to_process) == 0:
+        final_message_label.configure(fg="red")
+        final_message.set("Selecione ao menos um formato!")
+        return
+
+    final_message.set("")
 
     progress.set(0)
 
     start_button['state'] = "disabled"
     start = time()
 
-    progress_frame.destroy()
-    progress_frame = Frame(tk_root, pady=20)
-
-    Label(progress_frame, textvariable=current_file).pack()
-
-    progress_bar.destroy()
-    progress_bar = ttk.Progressbar(
-        progress_frame,
-        orient='horizontal',
-        mode='determinate',
-        length=300,
-        maximum=total_files,
-        variable=progress,
-    )
-
-    progress_bar.pack(side=LEFT, padx=10)
-    ttk.Label(progress_frame, textvariable=elapsed_time).pack(side=LEFT)
-
-    progress_frame.pack()
+    progress_bar.configure(maximum=total_files)
 
     files_renamed = 0
     for i, file_name in enumerate(files):
@@ -115,14 +133,19 @@ def process_files():
         elapsed_time.set((int(end - start), 's'))
 
     current_file.set('')
-    start_button['state'] = "normal"
+
+    final_message_label.configure(fg='#008f00')
+    final_message.set(f"Sucesso! {files_renamed} arquivos renomeados.")
 
 
 tk_root = Tk()
-tk_root.geometry('500x300')
-tk_root.resizable(False, False)
-tk_root.title("Organizar fotos")
+tk_root.geometry('700x600')
+# tk_root.resizable(False, False)
+tk_root.title("Organizador de fotos")
+window_icon = PhotoImage(file='assets/images/icon.png')
+tk_root.iconphoto(False, window_icon)
 
+# Variables
 selected_path = ''
 files_path_text = StringVar()
 files_found_text = StringVar()
@@ -131,15 +154,69 @@ files = []
 total_files = 0
 progress = DoubleVar()
 elapsed_time = StringVar()
-progress_frame = Frame(tk_root, pady=20)
-progress_bar = ttk.Progressbar()
+final_message = StringVar()
 
-Button(tk_root, text="Selecionar pasta", command=lambda: ask_files_path()).pack(pady=10)
-selected_path_label = Label(tk_root, textvariable=files_path_text)
-selected_path_label.pack()
-Label(tk_root, textvariable=files_found_text, fg='#008f00').pack()
-start_button = Button(tk_root, text="Iniciar", command=lambda: process_files())
+top_frame = Frame(tk_root)
+top_frame.pack(fill=X)
+
+settings_frame = Frame(tk_root, pady=10)
+settings_frame.pack(fill=X)
+
+progress_frame = Frame(tk_root, pady=10)
+progress_frame.pack(fill=X)
+Label(progress_frame, textvariable=current_file).pack()
+
+progress_bar_frame = Frame(progress_frame, pady=10)
+progress_bar_frame.pack()
+progress_bar = ttk.Progressbar(
+    progress_bar_frame,
+    orient='horizontal',
+    mode='determinate',
+    length=300,
+    variable=progress,
+)
+progress_bar.pack(side=LEFT, padx=10)
+Label(progress_bar_frame, textvariable=elapsed_time).pack(side=LEFT)
+
+bottom_frame = Frame(tk_root)
+bottom_frame.pack(fill=X)
+final_message_label = (Label(bottom_frame, textvariable=final_message, fg='#008f00'))
+final_message_label.pack(side=BOTTOM)
+
+start_button = Button(bottom_frame, text="Iniciar", command=lambda: process_files())
 start_button['state'] = "disabled"
-start_button.pack(side=BOTTOM, pady=10)
+start_button.pack()
+
+Button(top_frame, text="Selecionar pasta", command=lambda: ask_files_path()).pack(pady=10)
+search_files_button = Button(settings_frame, text="Buscar arquivos", command=lambda: scan_selected_path())
+search_files_button['state'] = "disabled"
+search_files_button.pack(side=BOTTOM, pady=10)
+selected_path_label = Label(top_frame, textvariable=files_path_text)
+selected_path_label.pack()
+files_found_label = Label(settings_frame, textvariable=files_found_text, fg='#008f00')  # transformar cor em constante
+files_found_label.pack(side=BOTTOM);
+
+extension_options = [".JPG", ".JPEG", ".PNG", ".GIF", ".MOV", ".MP4", ".AVI", ".JFIF", ".WEBP"]
+selected_extensions = []
+
+Label(settings_frame, text='Quais formatos deseja organizar?', pady=10).pack()
+
+
+def show():
+    for c, t in enumerate(selected_extensions):
+        print(extension_options[c], t.get())
+
+
+for i, option in enumerate(extension_options):
+    selected_extensions.append(IntVar())
+
+    Checkbutton(
+        settings_frame,
+        text=option,
+        variable=selected_extensions[i],
+        onvalue=1,
+        offvalue=0,
+        command=lambda: None,
+    ).pack()
 
 tk_root.mainloop()
