@@ -47,14 +47,20 @@ def process_files():
     global progress
     global elapsed_time
     global current_file
+    global progress_frame
+    global progress_bar
+
+    progress.set(0)
 
     start_button['state'] = "disabled"
     start = time()
 
+    progress_frame.destroy()
     progress_frame = Frame(tk_root, pady=20)
 
     Label(progress_frame, textvariable=current_file).pack()
 
+    progress_bar.destroy()
     progress_bar = ttk.Progressbar(
         progress_frame,
         orient='horizontal',
@@ -63,6 +69,7 @@ def process_files():
         maximum=total_files,
         variable=progress,
     )
+
     progress_bar.pack(side=LEFT, padx=10)
     ttk.Label(progress_frame, textvariable=elapsed_time).pack(side=LEFT)
 
@@ -124,6 +131,8 @@ files = []
 total_files = 0
 progress = DoubleVar()
 elapsed_time = StringVar()
+progress_frame = Frame(tk_root, pady=20)
+progress_bar = ttk.Progressbar()
 
 Button(tk_root, text="Selecionar pasta", command=lambda: ask_files_path()).pack(pady=10)
 selected_path_label = Label(tk_root, textvariable=files_path_text)
