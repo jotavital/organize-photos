@@ -94,8 +94,8 @@ def process_files():
 
     files_renamed = 0
     for i, file_name in enumerate(files):
-        current_file.set('')
         current_file.set(file_name)
+        current_file_label.update()
 
         file_path = f'{selected_path}/{file_name}'
         file_extension = splitext(file_path)[1]
@@ -132,7 +132,7 @@ def process_files():
 
         rename(f'{file_path}', f'{new_file_path}')
         files_renamed += 1
-        sleep(0.1)
+        # sleep(0.1)
 
         tk_root.update_idletasks()
         progress.set(progress.get() + 1)
@@ -141,6 +141,7 @@ def process_files():
         elapsed_time.set((int(end - start), 's'))
 
     current_file.set('')
+    current_file_label.update()
 
     final_message_label.configure(fg='#008f00')
     final_message.set(f"Sucesso! {files_renamed} arquivos renomeados.")
@@ -170,7 +171,8 @@ settings_frame.pack(fill=X)
 
 progress_frame = Frame(tk_root, pady=10)
 progress_frame.pack(fill=X)
-Label(progress_frame, textvariable=current_file).pack()
+current_file_label = Label(progress_frame, textvariable=current_file)
+current_file_label.pack()
 
 progress_bar_frame = Frame(progress_frame, pady=10)
 progress_bar_frame.pack()
