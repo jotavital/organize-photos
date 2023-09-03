@@ -1,1 +1,5 @@
-./example-photos
+__pycache__
+build
+dist
+.idea
+venv
