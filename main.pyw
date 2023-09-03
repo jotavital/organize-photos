@@ -1,4 +1,3 @@
-import sys
 from os import listdir, rename
 from os.path import isfile, join, splitext
 from PIL import Image as PilImage
@@ -51,7 +50,7 @@ def scan_selected_path():
     files = [
         f for f in listdir(selected_path)
         if isfile(join(selected_path, f))
-           and f.upper().endswith((".JPG", ".JPEG", ".PNG", ".GIF", ".MOV", ".MP4", ".AVI", ".JFIF", ".WEBP"))
+           and f.upper().endswith(tuple(extensions_to_process))
     ]
 
     total_files = len(files)
@@ -95,6 +94,7 @@ def process_files():
 
     files_renamed = 0
     for i, file_name in enumerate(files):
+        current_file.set('')
         current_file.set(file_name)
 
         file_path = f'{selected_path}/{file_name}'
@@ -103,14 +103,22 @@ def process_files():
         exif = file.getexif()
         file.close()
 
-        if not exif:
+        if not exif or not (306 in exif) or exif[306] == "0000:00:00 00:00:00":
             print(f'{colors.bcolors.DANGER}ERRO: O arquivo {file_name} não contém o metadado. {colors.bcolors.ENDC}')
             tk_root.update_idletasks()
             progress.set(progress.get() + 1)
-            break
+            continue
 
         date_taken = exif[306]
-        formatted_date_taken = datetime.strptime(date_taken, '%Y:%m:%d %H:%M:%S')
+
+        formatted_date_taken = None
+
+        try:
+            formatted_date_taken = datetime.strptime(date_taken, '%Y:%m:%d %H:%M:%S')
+        except ValueError:
+            print(f'{colors.bcolors.DANGER}ERRO: O arquivo {file_name} contém um formato inválido do metadado. {colors.bcolors.ENDC}')
+            continue
+
         formatted_date_taken = formatted_date_taken.strftime('%d-%m-%Y %H-%M-%S')
 
         new_file_name = f'{formatted_date_taken}{file_extension}'
@@ -124,7 +132,7 @@ def process_files():
 
         rename(f'{file_path}', f'{new_file_path}')
         files_renamed += 1
-        sleep(0.5)
+        sleep(0.1)
 
         tk_root.update_idletasks()
         progress.set(progress.get() + 1)
@@ -140,10 +148,8 @@ def process_files():
 
 tk_root = Tk()
 tk_root.geometry('700x600')
-# tk_root.resizable(False, False)
+tk_root.resizable(False, False)
 tk_root.title("Organizador de fotos")
-window_icon = PhotoImage(file='assets/images/icon.png')
-tk_root.iconphoto(False, window_icon)
 
 # Variables
 selected_path = ''
@@ -196,16 +202,10 @@ selected_path_label.pack()
 files_found_label = Label(settings_frame, textvariable=files_found_text, fg='#008f00')  # transformar cor em constante
 files_found_label.pack(side=BOTTOM);
 
-extension_options = [".JPG", ".JPEG", ".PNG", ".GIF", ".MOV", ".MP4", ".AVI", ".JFIF", ".WEBP"]
+extension_options = [".JPG", ".JPEG", ".PNG", ".JFIF", ".WEBP"]
 selected_extensions = []
 
 Label(settings_frame, text='Quais formatos deseja organizar?', pady=10).pack()
-
-
-def show():
-    for c, t in enumerate(selected_extensions):
-        print(extension_options[c], t.get())
-
 
 for i, option in enumerate(extension_options):
     selected_extensions.append(IntVar())
