@@ -1,8 +1,9 @@
+import random
 from os import listdir, rename
 from os.path import isfile, join, splitext
 from PIL import Image as PilImage
 import colors
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import sleep, time
 from tkinter import *
 from tkinter import ttk
@@ -73,6 +74,8 @@ def process_files():
     global selected_extensions
 
     extensions_to_process = []
+    log_hash = random.randint(1, 9999999)
+    f = open(f"log-{log_hash}.txt", "a")
 
     for c, t in enumerate(selected_extensions):
         if t.get():
@@ -99,27 +102,70 @@ def process_files():
 
         file_path = f'{selected_path}/{file_name}'
         file_extension = splitext(file_path)[1]
-        file = PilImage.open(f'{file_path}')
-        exif = file.getexif()
-        file.close()
 
+        exif = None
+        if file_extension.upper() in image_extensions:
+            file = PilImage.open(f'{file_path}')
+            exif = file.getexif()
+            file.close()
+
+        rename_from = "exif"
         if not exif or not (306 in exif) or exif[306] == "0000:00:00 00:00:00":
-            print(f'{colors.bcolors.DANGER}ERRO: O arquivo {file_name} não contém o metadado. {colors.bcolors.ENDC}')
+            rename_from = "name"
+
+        formatted_date_taken = None
+        is_screenshot = file_name.startswith("Screenshot_")
+        is_img = file_name.startswith("IMG-")
+        is_vid_type1 = file_name.startswith("VID-")
+        is_vid_type2 = file_name.startswith("VID_")
+        can_rename_from_name = is_screenshot or is_img or is_vid_type1 or is_vid_type2
+
+        if rename_from == "name" and can_rename_from_name:
+            if is_screenshot:
+                file_date = file_name.split("_")[1]
+                date_year, date_month, date_day, date_hours, date_minutes, date_seconds, *trash = file_date.split("-")
+                formatted_date_taken = f'{date_day}-{date_month}-{date_year} {date_hours}-{date_minutes}-{date_seconds}'
+            elif is_img or is_vid_type1:
+                file_date = file_name.split("-")[1]
+                date_year = file_date[0:4]
+                date_month = file_date[4:6]
+                date_day = file_date[6:8]
+                formatted_date_taken = f'{date_day}-{date_month}-{date_year}'
+            elif is_vid_type2:
+                file_date = file_name.split("_")[1]
+                file_time = file_name.split("_")[2].split(".")[0]
+                date_year = file_date[0:4]
+                date_month = file_date[4:6]
+                date_day = file_date[6:8]
+                date_hours = file_time[0:2]
+                date_minutes = file_time[2:4]
+                date_seconds = file_time[4:6]
+                formatted_date_taken = f'{date_day}-{date_month}-{date_year} {date_hours}-{date_minutes}-{date_seconds}'
+        elif rename_from == "exif":
+            date_taken = exif[306]
+
+            try:
+                formatted_date_taken = datetime.strptime(date_taken, '%Y:%m:%d %H:%M:%S')
+            except ValueError:
+                error = f"ERRO: Não foi possível renomear o arquivo {file_name}.\n";
+                f.write(error)
+
+                print(
+                    f'{colors.bcolors.DANGER}{error} {colors.bcolors.ENDC}')
+                tk_root.update_idletasks()
+                progress.set(progress.get() + 1)
+                continue
+
+            formatted_date_taken = formatted_date_taken.strftime('%d-%m-%Y %H-%M-%S')
+        else:
+            error = f"ERRO: Não foi possível renomear o arquivo {file_name}.\n";
+            f.write(error)
+
+            print(
+                f'{colors.bcolors.DANGER}{error} {colors.bcolors.ENDC}')
             tk_root.update_idletasks()
             progress.set(progress.get() + 1)
             continue
-
-        date_taken = exif[306]
-
-        formatted_date_taken = None
-
-        try:
-            formatted_date_taken = datetime.strptime(date_taken, '%Y:%m:%d %H:%M:%S')
-        except ValueError:
-            print(f'{colors.bcolors.DANGER}ERRO: O arquivo {file_name} contém um formato inválido do metadado. {colors.bcolors.ENDC}')
-            continue
-
-        formatted_date_taken = formatted_date_taken.strftime('%d-%m-%Y %H-%M-%S')
 
         new_file_name = f'{formatted_date_taken}{file_extension}'
         new_file_path = f'{selected_path}/{new_file_name}'
@@ -138,13 +184,14 @@ def process_files():
         progress.set(progress.get() + 1)
 
         end = time()
-        elapsed_time.set((int(end - start), 's'))
+        elapsed_time.set(str(timedelta(seconds=int(end - start))))
 
     current_file.set('')
     current_file_label.update()
 
     final_message_label.configure(fg='#008f00')
     final_message.set(f"Sucesso! {files_renamed} arquivos renomeados.")
+    f.close()
 
 
 tk_root = Tk()
@@ -204,7 +251,9 @@ selected_path_label.pack()
 files_found_label = Label(settings_frame, textvariable=files_found_text, fg='#008f00')  # transformar cor em constante
 files_found_label.pack(side=BOTTOM);
 
-extension_options = [".JPG", ".JPEG", ".PNG", ".JFIF", ".WEBP"]
+image_extensions = [".JPG", ".JPEG", ".PNG", ".JFIF", ".WEBP"]
+video_extensions = [".MOV", ".MP4", ".AVI", ".GIF"]
+extension_options = image_extensions + video_extensions
 selected_extensions = []
 
 Label(settings_frame, text='Quais formatos deseja organizar?', pady=10).pack()
