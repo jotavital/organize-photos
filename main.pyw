@@ -75,7 +75,7 @@ def process_files():
 
     extensions_to_process = []
     log_hash = random.randint(1, 9999999)
-    f = open(f"log-{log_hash}.txt", "a")
+    f = open(f"log-{log_hash}.txt", "a", encoding="utf-8")
 
     for c, t in enumerate(selected_extensions):
         if t.get():
@@ -115,25 +115,45 @@ def process_files():
 
         formatted_date_taken = None
         is_screenshot = file_name.startswith("Screenshot_")
-        is_img = file_name.startswith("IMG-")
+        is_img_type1 = file_name.startswith("IMG-")
+        is_img_type2 = file_name.startswith("IMG_")
         is_vid_type1 = file_name.startswith("VID-")
         is_vid_type2 = file_name.startswith("VID_")
-        can_rename_from_name = is_screenshot or is_img or is_vid_type1 or is_vid_type2
+        can_rename_from_name = is_screenshot or is_img_type1 or is_img_type2 or is_vid_type1 or is_vid_type2
 
         if rename_from == "name" and can_rename_from_name:
             if is_screenshot:
                 file_date = file_name.split("_")[1]
-                date_year, date_month, date_day, date_hours, date_minutes, date_seconds, *trash = file_date.split("-")
+                file_date_pieces = file_date.split("-")
+
+                if len(file_date_pieces) > 2:
+                    date_year, date_month, date_day, date_hours, date_minutes, date_seconds, *trash = file_date.split("-")
+                elif len(file_date_pieces) == 2:
+                    file_date, file_time = file_date.split("-")
+                    date_year = file_date[0:4]
+                    date_month = file_date[4:6]
+                    date_day = file_date[6:8]
+                    date_hours = file_time[0:2]
+                    date_minutes = file_time[2:4]
+                    date_seconds = file_time[4:6]
+
                 formatted_date_taken = f'{date_day}-{date_month}-{date_year} {date_hours}-{date_minutes}-{date_seconds}'
-            elif is_img or is_vid_type1:
+            elif is_img_type1 or is_vid_type1:
                 file_date = file_name.split("-")[1]
                 date_year = file_date[0:4]
                 date_month = file_date[4:6]
                 date_day = file_date[6:8]
                 formatted_date_taken = f'{date_day}-{date_month}-{date_year}'
-            elif is_vid_type2:
-                file_date = file_name.split("_")[1]
-                file_time = file_name.split("_")[2].split(".")[0]
+            elif is_vid_type2 or is_img_type2:
+                file_date_pieces = file_name.split("_")
+
+                if len(file_date_pieces) < 3:
+                    tk_root.update_idletasks()
+                    progress.set(progress.get() + 1)
+                    continue
+
+                trash, file_date, file_time, *trash = file_date_pieces
+
                 date_year = file_date[0:4]
                 date_month = file_date[4:6]
                 date_day = file_date[6:8]
