@@ -6,3 +6,6 @@ Ps: The code is far from clean, but Python isn't my main language, and I don't h
 
 To build:
 ```pyinstaller --onefile .\main.pyw```
+
+It looks like this:
+![image](https://github.com/jotavital/organize-photos/assets/80636554/9323d528-6d55-4695-949c-881403c86921)
