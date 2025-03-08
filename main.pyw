@@ -116,12 +116,11 @@ def process_files():
             
             try:
                 exif = piexif.load(file.info['exif'])
-            except KeyError:
+            except Exception as e:
+                log_file.write(e.__str__())
                 exif = None
             finally:
                 file.close()
-        else:
-            continue
 
         try: 
             if exif:
@@ -177,6 +176,8 @@ def process_files():
                         date_minutes = file_time[2:4]
                         date_seconds = file_time[4:6]
                         formatted_date_taken = f'{date_day}-{date_month}-{date_year} {date_hours}-{date_minutes}-{date_seconds}'
+                    else:
+                        formatted_date_taken = datetime.fromtimestamp(getmtime(file_path)).strftime('%d-%m-%Y %H-%M-%S')
                 elif getmtime(file_path):
                     formatted_date_taken = datetime.fromtimestamp(getmtime(file_path)).strftime('%d-%m-%Y %H-%M-%S')
         except Exception as e:
