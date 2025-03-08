@@ -1,14 +1,13 @@
-import random
-from os import listdir, rename
-from os.path import isfile, join, splitext
+from os import listdir, rename, makedirs
+from os.path import isfile, join, splitext, exists, getmtime
 from PIL import Image as PilImage
-import colors
+import piexif
 from datetime import datetime, timedelta
-from time import sleep, time
+from time import time
 from tkinter import *
 from tkinter import ttk
 from tkinter.filedialog import askdirectory
-
+from tkinter import messagebox
 
 def ask_files_path():
     search_files_button['state'] = "disabled"
@@ -74,8 +73,11 @@ def process_files():
     global selected_extensions
 
     extensions_to_process = []
-    log_hash = random.randint(1, 9999999)
-    f = open(f"log-{log_hash}.txt", "a", encoding="utf-8")
+
+    if not exists("logs"):
+        makedirs("logs")
+
+    log_file = open(f"./logs/log-{time()}.txt", "a", encoding="utf-8")
 
     for c, t in enumerate(selected_extensions):
         if t.get():
@@ -104,105 +106,97 @@ def process_files():
         file_extension = splitext(file_path)[1]
 
         exif = None
+        date_taken = None
+
         if file_extension.upper() in image_extensions:
             file = PilImage.open(f'{file_path}')
-            exif = file.getexif()
-            file.close()
+            
+            try:
+                exif = piexif.load(file.info['exif'])
+            except KeyError:
+                exif = None
+            finally:
+                file.close()
+        else:
+            continue
 
-        rename_from = "exif"
-        if not exif or not (306 in exif) or exif[306] == "0000:00:00 00:00:00":
-            rename_from = "name"
+        try: 
+            if exif:
+                if 36867 in exif.get("Exif", {}):
+                    date_taken = exif["Exif"][36867].decode('utf-8')
+                
+                if 306 in exif.get("Exif", {}):
+                    date_taken = exif["Exif"][306].decode('utf-8')
+                    
+                if date_taken and date_taken != "0000:00:00 00:00:00":
+                    formatted_date_taken = datetime.strptime(date_taken, '%Y:%m:%d %H:%M:%S')
+                    formatted_date_taken = formatted_date_taken.strftime('%d-%m-%Y %H-%M-%S')
+            else:                
+                formatted_date_taken = None
+                is_screenshot = file_name.startswith("Screenshot_")
+                is_img_type1 = file_name.startswith("IMG-")
+                is_img_type2 = file_name.startswith("IMG_")
+                is_vid_type1 = file_name.startswith("VID-")
+                is_vid_type2 = file_name.startswith("VID_")
+                
+                if is_screenshot:
+                    file_date = file_name.split("_")[1]
+                    file_date_pieces = file_date.split("-")
 
-        formatted_date_taken = None
-        is_screenshot = file_name.startswith("Screenshot_")
-        is_img_type1 = file_name.startswith("IMG-")
-        is_img_type2 = file_name.startswith("IMG_")
-        is_vid_type1 = file_name.startswith("VID-")
-        is_vid_type2 = file_name.startswith("VID_")
-        can_rename_from_name = is_screenshot or is_img_type1 or is_img_type2 or is_vid_type1 or is_vid_type2
+                    if len(file_date_pieces) > 2:
+                        date_year, date_month, date_day, date_hours, date_minutes, date_seconds, *trash = file_date.split("-")
+                    elif len(file_date_pieces) == 2:
+                        file_date, file_time = file_date.split("-")
+                        date_year = file_date[0:4]
+                        date_month = file_date[4:6]
+                        date_day = file_date[6:8]
+                        date_hours = file_time[0:2]
+                        date_minutes = file_time[2:4]
+                        date_seconds = file_time[4:6]
 
-        if rename_from == "name" and can_rename_from_name:
-            if is_screenshot:
-                file_date = file_name.split("_")[1]
-                file_date_pieces = file_date.split("-")
-
-                if len(file_date_pieces) > 2:
-                    date_year, date_month, date_day, date_hours, date_minutes, date_seconds, *trash = file_date.split("-")
-                elif len(file_date_pieces) == 2:
-                    file_date, file_time = file_date.split("-")
+                    formatted_date_taken = f'{date_day}-{date_month}-{date_year} {date_hours}-{date_minutes}-{date_seconds}'
+                elif is_img_type1 or is_vid_type1:
+                    file_date = file_name.split("-")[1]
                     date_year = file_date[0:4]
                     date_month = file_date[4:6]
                     date_day = file_date[6:8]
-                    date_hours = file_time[0:2]
-                    date_minutes = file_time[2:4]
-                    date_seconds = file_time[4:6]
+                    formatted_date_taken = f'{date_day}-{date_month}-{date_year}'
+                elif is_vid_type2 or is_img_type2:
+                    file_date_pieces = file_name.split("_")
 
-                formatted_date_taken = f'{date_day}-{date_month}-{date_year} {date_hours}-{date_minutes}-{date_seconds}'
-            elif is_img_type1 or is_vid_type1:
-                file_date = file_name.split("-")[1]
-                date_year = file_date[0:4]
-                date_month = file_date[4:6]
-                date_day = file_date[6:8]
-                formatted_date_taken = f'{date_day}-{date_month}-{date_year}'
-            elif is_vid_type2 or is_img_type2:
-                file_date_pieces = file_name.split("_")
+                    if len(file_date_pieces) >= 3:
+                        trash, file_date, file_time, *trash = file_date_pieces
 
-                if len(file_date_pieces) < 3:
-                    tk_root.update_idletasks()
-                    progress.set(progress.get() + 1)
-                    continue
+                        date_year = file_date[0:4]
+                        date_month = file_date[4:6]
+                        date_day = file_date[6:8]
+                        date_hours = file_time[0:2]
+                        date_minutes = file_time[2:4]
+                        date_seconds = file_time[4:6]
+                        formatted_date_taken = f'{date_day}-{date_month}-{date_year} {date_hours}-{date_minutes}-{date_seconds}'
+                elif getmtime(file_path):
+                    formatted_date_taken = datetime.fromtimestamp(getmtime(file_path)).strftime('%d-%m-%Y %H-%M-%S')
+        except Exception as e:
+            log_file.write(e.__str__())
+            messagebox.showerror("Erro", f"Ocorreu um erro inesperado.")
+            tk_root.destroy()
 
-                trash, file_date, file_time, *trash = file_date_pieces
+        if formatted_date_taken:
+            new_file_name = f'{formatted_date_taken}{file_extension}'
+            new_file_path = f'{selected_path}/{new_file_name}'  
+            repeated_file_counter = 0
+            
+            while isfile(new_file_path) == 1:
+                repeated_file_counter += 1
+                new_file_name = f'{formatted_date_taken}-{repeated_file_counter}{file_extension}'
+                new_file_path = f'{selected_path}/{new_file_name}'
 
-                date_year = file_date[0:4]
-                date_month = file_date[4:6]
-                date_day = file_date[6:8]
-                date_hours = file_time[0:2]
-                date_minutes = file_time[2:4]
-                date_seconds = file_time[4:6]
-                formatted_date_taken = f'{date_day}-{date_month}-{date_year} {date_hours}-{date_minutes}-{date_seconds}'
-        elif rename_from == "exif":
-            date_taken = exif[306]
-
-            try:
-                formatted_date_taken = datetime.strptime(date_taken, '%Y:%m:%d %H:%M:%S')
-            except ValueError:
-                error = f"ERRO: Não foi possível renomear o arquivo {file_name}.\n";
-                f.write(error)
-
-                print(
-                    f'{colors.bcolors.DANGER}{error} {colors.bcolors.ENDC}')
-                tk_root.update_idletasks()
-                progress.set(progress.get() + 1)
-                continue
-
-            formatted_date_taken = formatted_date_taken.strftime('%d-%m-%Y %H-%M-%S')
-        else:
-            error = f"ERRO: Não foi possível renomear o arquivo {file_name}.\n";
-            f.write(error)
-
-            print(
-                f'{colors.bcolors.DANGER}{error} {colors.bcolors.ENDC}')
-            tk_root.update_idletasks()
-            progress.set(progress.get() + 1)
-            continue
-
-        new_file_name = f'{formatted_date_taken}{file_extension}'
-        new_file_path = f'{selected_path}/{new_file_name}'
-
-        repeated_file_counter = 0
-        while isfile(new_file_path) == 1:
-            repeated_file_counter += 1
-            new_file_name = f'{formatted_date_taken}-{repeated_file_counter}{file_extension}'
-            new_file_path = f'{selected_path}/{new_file_name}'
-
-        rename(f'{file_path}', f'{new_file_path}')
-        files_renamed += 1
-        # sleep(0.1)
+            rename(f'{file_path}', f'{new_file_path}')
+            files_renamed += 1
 
         tk_root.update_idletasks()
         progress.set(progress.get() + 1)
-
+        
         end = time()
         elapsed_time.set(str(timedelta(seconds=int(end - start))))
 
@@ -211,7 +205,7 @@ def process_files():
 
     final_message_label.configure(fg='#008f00')
     final_message.set(f"Sucesso! {files_renamed} arquivos renomeados.")
-    f.close()
+    log_file.close()
 
 
 tk_root = Tk()
@@ -271,7 +265,7 @@ selected_path_label.pack()
 files_found_label = Label(settings_frame, textvariable=files_found_text, fg='#008f00')  # transformar cor em constante
 files_found_label.pack(side=BOTTOM);
 
-image_extensions = [".JPG", ".JPEG", ".PNG", ".JFIF", ".WEBP"]
+image_extensions = [".JPG", ".JPEG", ".HEIC", ".PNG", ".JFIF", ".DNG", ".WEBP"]
 video_extensions = [".MOV", ".MP4", ".AVI", ".GIF"]
 extension_options = image_extensions + video_extensions
 selected_extensions = []
