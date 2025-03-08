@@ -8,6 +8,9 @@ from tkinter import *
 from tkinter import ttk
 from tkinter.filedialog import askdirectory
 from tkinter import messagebox
+from pillow_heif import register_heif_opener
+
+register_heif_opener()
 
 def ask_files_path():
     search_files_button['state'] = "disabled"
