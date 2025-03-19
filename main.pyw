@@ -80,7 +80,7 @@ def process_files():
     if not exists("logs"):
         makedirs("logs")
 
-    log_file = open(f"./logs/log-{time()}.txt", "a", encoding="utf-8")
+    log_file = open(f"./logs/log-{datetime.now().strftime('%Y-%m-%d')}.txt", "a", encoding="utf-8")
 
     for c, t in enumerate(selected_extensions):
         if t.get():
@@ -101,7 +101,7 @@ def process_files():
     progress_bar.configure(maximum=total_files)
 
     files_renamed = 0
-    for i, file_name in enumerate(files):
+    for file_name in files:
         current_file.set(file_name)
         current_file_label.update()
 
@@ -110,6 +110,7 @@ def process_files():
 
         exif = None
         date_taken = None
+        formatted_date_taken = None
 
         if file_extension.upper() in image_extensions:
             file = PilImage.open(f'{file_path}')
@@ -132,70 +133,33 @@ def process_files():
                     
                 if date_taken and date_taken != "0000:00:00 00:00:00":
                     formatted_date_taken = datetime.strptime(date_taken, '%Y:%m:%d %H:%M:%S')
+                    year_taken = formatted_date_taken.year
                     formatted_date_taken = formatted_date_taken.strftime('%d-%m-%Y %H-%M-%S')
-            else:                
-                formatted_date_taken = None
-                is_screenshot = file_name.startswith("Screenshot_")
-                is_img_type1 = file_name.startswith("IMG-")
-                is_img_type2 = file_name.startswith("IMG_")
-                is_vid_type1 = file_name.startswith("VID-")
-                is_vid_type2 = file_name.startswith("VID_")
-                
-                if is_screenshot:
-                    file_date = file_name.split("_")[1]
-                    file_date_pieces = file_date.split("-")
-
-                    if len(file_date_pieces) > 2:
-                        date_year, date_month, date_day, date_hours, date_minutes, date_seconds, *trash = file_date.split("-")
-                    elif len(file_date_pieces) == 2:
-                        file_date, file_time = file_date.split("-")
-                        date_year = file_date[0:4]
-                        date_month = file_date[4:6]
-                        date_day = file_date[6:8]
-                        date_hours = file_time[0:2]
-                        date_minutes = file_time[2:4]
-                        date_seconds = file_time[4:6]
-
-                    formatted_date_taken = f'{date_day}-{date_month}-{date_year} {date_hours}-{date_minutes}-{date_seconds}'
-                elif is_img_type1 or is_vid_type1:
-                    file_date = file_name.split("-")[1]
-                    date_year = file_date[0:4]
-                    date_month = file_date[4:6]
-                    date_day = file_date[6:8]
-                    formatted_date_taken = f'{date_day}-{date_month}-{date_year}'
-                elif is_vid_type2 or is_img_type2:
-                    file_date_pieces = file_name.split("_")
-
-                    if len(file_date_pieces) >= 3:
-                        trash, file_date, file_time, *trash = file_date_pieces
-
-                        date_year = file_date[0:4]
-                        date_month = file_date[4:6]
-                        date_day = file_date[6:8]
-                        date_hours = file_time[0:2]
-                        date_minutes = file_time[2:4]
-                        date_seconds = file_time[4:6]
-                        formatted_date_taken = f'{date_day}-{date_month}-{date_year} {date_hours}-{date_minutes}-{date_seconds}'
-                    else:
-                        formatted_date_taken = datetime.fromtimestamp(getmtime(file_path)).strftime('%d-%m-%Y %H-%M-%S')
-                elif getmtime(file_path):
+                    
+            if not formatted_date_taken:
+                if getmtime(file_path):
                     formatted_date_taken = datetime.fromtimestamp(getmtime(file_path)).strftime('%d-%m-%Y %H-%M-%S')
+                    year_taken = datetime.fromtimestamp(getmtime(file_path)).year
         except Exception as e:
             log_file.write(e.__str__())
             messagebox.showerror("Erro", f"Ocorreu um erro inesperado.")
             tk_root.destroy()
 
         if formatted_date_taken:
+            new_file_folder = f'{selected_path}'
             new_file_name = f'{formatted_date_taken}{file_extension}'
-            new_file_path = f'{selected_path}/{new_file_name}'  
-            repeated_file_counter = 0
             
-            while isfile(new_file_path) == 1:
+            if should_organize_photos_by_year.get():
+                new_file_folder = f'{selected_path}/{year_taken}'
+                if not exists(new_file_folder):
+                    makedirs(new_file_folder)
+            
+            repeated_file_counter = 0                
+            while isfile(f'{new_file_folder}/{new_file_name}') == 1:
                 repeated_file_counter += 1
-                new_file_name = f'{formatted_date_taken}-{repeated_file_counter}{file_extension}'
-                new_file_path = f'{selected_path}/{new_file_name}'
+                new_file_name = f'{formatted_date_taken} ({repeated_file_counter}){file_extension}'
 
-            rename(f'{file_path}', f'{new_file_path}')
+            rename(f'{file_path}', f'{new_file_folder}/{new_file_name}')
             files_renamed += 1
 
         tk_root.update_idletasks()
@@ -213,7 +177,7 @@ def process_files():
 
 
 tk_root = Tk()
-tk_root.geometry('700x600')
+tk_root.geometry('700x700')
 tk_root.resizable(False, False)
 tk_root.title("Organizador de fotos")
 
@@ -227,6 +191,7 @@ total_files = 0
 progress = DoubleVar()
 elapsed_time = StringVar()
 final_message = StringVar()
+should_organize_photos_by_year = IntVar()
 
 top_frame = Frame(tk_root)
 top_frame.pack(fill=X)
@@ -236,6 +201,7 @@ settings_frame.pack(fill=X)
 
 progress_frame = Frame(tk_root, pady=10)
 progress_frame.pack(fill=X)
+
 current_file_label = Label(progress_frame, textvariable=current_file)
 current_file_label.pack()
 
@@ -268,6 +234,15 @@ selected_path_label = Label(top_frame, textvariable=files_path_text)
 selected_path_label.pack()
 files_found_label = Label(settings_frame, textvariable=files_found_text, fg='#008f00')  # transformar cor em constante
 files_found_label.pack(side=BOTTOM);
+
+Checkbutton(
+    settings_frame,
+    text="Organizar as fotos em pastas por ano",
+    variable=should_organize_photos_by_year,
+    onvalue=1,
+    offvalue=0,
+    command=lambda: None,
+).pack(side=BOTTOM, pady=10)
 
 image_extensions = [".JPG", ".JPEG", ".HEIC", ".PNG", ".JFIF", ".DNG", ".WEBP"]
 video_extensions = [".MOV", ".MP4", ".AVI", ".GIF"]
