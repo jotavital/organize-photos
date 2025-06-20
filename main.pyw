@@ -154,13 +154,15 @@ def process_files():
                 if not exists(new_file_folder):
                     makedirs(new_file_folder)
             
-            repeated_file_counter = 0                
-            while isfile(f'{new_file_folder}/{new_file_name}') == 1:
-                repeated_file_counter += 1
-                new_file_name = f'{formatted_date_taken} ({repeated_file_counter}){file_extension}'
-
-            rename(f'{file_path}', f'{new_file_folder}/{new_file_name}')
-            files_renamed += 1
+            repeated_file_counter = 0
+            while True:
+                try:
+                    rename(f'{file_path}', f'{new_file_folder}/{new_file_name}')
+                    files_renamed += 1
+                    break
+                except FileExistsError:
+                    repeated_file_counter += 1
+                    new_file_name = f'{formatted_date_taken} ({repeated_file_counter}){file_extension}'
 
         tk_root.update_idletasks()
         progress.set(progress.get() + 1)
