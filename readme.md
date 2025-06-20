@@ -6,6 +6,12 @@ This is to organize my picture library.
 Ps: The code is far from clean, but Python isn't my main language, and I don't have much time to organize the code, so as long as it is only for personal use, I don't care a lot :) 
 
 # To build:
+```pip install pillow-heif```
+
+```pip install piexif```
+
+```pip install pillow```
+
 ```pip install pyinstaller```
 
 ```pyinstaller --onefile .\main.pyw```
