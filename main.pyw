@@ -1,4 +1,4 @@
-from os import listdir, rename, makedirs
+from os import listdir, rename, makedirs, walk
 from os.path import isfile, join, splitext, exists, getmtime
 from PIL import Image as PilImage
 import piexif
@@ -50,21 +50,21 @@ def scan_selected_path():
 
     final_message.set("")
 
-    files = [
-        f for f in listdir(selected_path)
-        if isfile(join(selected_path, f))
-           and f.upper().endswith(tuple(extensions_to_process))
-    ]
+    files = []
+    for root, dirs, file_list in walk(selected_path):
+        for f in file_list:
+            if f.upper().endswith(tuple(extensions_to_process)):
+                files.append(join(root, f))
 
     total_files = len(files)
 
     if total_files == 0:
         files_found_label.configure(fg="red")
-        files_found_text.set("Não encontramos na pasta selecionada.")
-
-    files_found_label.configure(fg="#008f00")
-    files_found_text.set(f"{total_files} arquivos encontrados.")
-    start_button['state'] = 'normal'
+        files_found_text.set("Não encontramos arquivos na pasta selecionada.")
+    else:
+        files_found_label.configure(fg="#008f00")
+        files_found_text.set(f"{total_files} arquivos encontrados.")
+        start_button['state'] = 'normal'
 
 
 def process_files():
@@ -101,11 +101,11 @@ def process_files():
     progress_bar.configure(maximum=total_files)
 
     files_renamed = 0
-    for file_name in files:
+    for file_path in files:
+        file_name = splitext(file_path)[0].split('/')[-1] + splitext(file_path)[1]
         current_file.set(file_name)
         current_file_label.update()
 
-        file_path = f'{selected_path}/{file_name}'
         file_extension = splitext(file_path)[1]
 
         exif = None
@@ -113,7 +113,7 @@ def process_files():
         formatted_date_taken = None
 
         if file_extension.upper() in image_extensions:
-            file = PilImage.open(f'{file_path}')
+            file = PilImage.open(file_path)
             
             try:
                 exif = piexif.load(file.info['exif'])
@@ -134,11 +134,11 @@ def process_files():
                 if date_taken and date_taken != "0000:00:00 00:00:00":
                     formatted_date_taken = datetime.strptime(date_taken, '%Y:%m:%d %H:%M:%S')
                     year_taken = formatted_date_taken.year
-                    formatted_date_taken = formatted_date_taken.strftime('%d-%m-%Y %H-%M-%S')
+                    formatted_date_taken = formatted_date_taken.strftime('%Y-%m-%d %H-%M-%S')
                     
             if not formatted_date_taken:
                 if getmtime(file_path):
-                    formatted_date_taken = datetime.fromtimestamp(getmtime(file_path)).strftime('%d-%m-%Y %H-%M-%S')
+                    formatted_date_taken = datetime.fromtimestamp(getmtime(file_path)).strftime('%Y-%m-%d %H-%M-%S')
                     year_taken = datetime.fromtimestamp(getmtime(file_path)).year
         except Exception as e:
             log_file.write(e.__str__())
@@ -157,7 +157,7 @@ def process_files():
             repeated_file_counter = 0
             while True:
                 try:
-                    rename(f'{file_path}', f'{new_file_folder}/{new_file_name}')
+                    rename(file_path, f'{new_file_folder}/{new_file_name}')
                     files_renamed += 1
                     break
                 except FileExistsError:
@@ -176,6 +176,12 @@ def process_files():
     final_message_label.configure(fg='#008f00')
     final_message.set(f"Sucesso! {files_renamed} arquivos renomeados.")
     log_file.close()
+
+
+def toggle_all_extensions():
+    select_all = select_all_var.get()
+    for var in selected_extensions:
+        var.set(select_all)
 
 
 tk_root = Tk()
@@ -250,8 +256,19 @@ image_extensions = [".JPG", ".JPEG", ".HEIC", ".PNG", ".JFIF", ".DNG", ".WEBP"]
 video_extensions = [".MOV", ".MP4", ".AVI", ".GIF"]
 extension_options = image_extensions + video_extensions
 selected_extensions = []
+select_all_var = IntVar()
 
 Label(settings_frame, text='Quais formatos deseja organizar?', pady=10).pack()
+
+Checkbutton(
+    settings_frame,
+    text="Selecionar todos",
+    variable=select_all_var,
+    onvalue=1,
+    offvalue=0,
+    command=toggle_all_extensions,
+    font=('TkDefaultFont', 9, 'bold')
+).pack(pady=(0, 10))
 
 for i, option in enumerate(extension_options):
     selected_extensions.append(IntVar())
