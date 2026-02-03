@@ -39,5 +39,5 @@ jobs:
             - name: Upload do Executável
               uses: actions/upload-artifact@v4
               with:
-                  name: OrganizadorFotos
+                  name: Organize photos
                   path: dist/*.exe
