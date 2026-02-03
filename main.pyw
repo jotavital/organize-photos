@@ -1,285 +1,287 @@
-from os import listdir, rename, makedirs, walk
-from os.path import isfile, join, splitext, exists, getmtime
-from PIL import Image as PilImage
-import piexif
-from datetime import datetime, timedelta
-from time import time
-from tkinter import *
-from tkinter import ttk
-from tkinter.filedialog import askdirectory
-from tkinter import messagebox
-from pillow_heif import register_heif_opener
+import customtkinter as ctk
+from tkinter import filedialog, messagebox
+from core import PhotoOrganizerCore
+import threading
+import os
 
-register_heif_opener()
-
-def ask_files_path():
-    search_files_button['state'] = "disabled"
-    global selected_path
-    global files_found_text
-
-    start_button['state'] = 'disabled'
-    selected_path = askdirectory(title='Selecione a pasta onde estão as fotos')
-    selected_path_label.configure(fg="#000")
-
-    if selected_path == "":
-        selected_path_label.configure(fg="#FF0000")
-        files_path_text.set("Nenhuma pasta foi selecionada.")
-        files_found_text.set("")
-        return
-
-    files_path_text.set(selected_path)
-    files_found_text.set('')
-    search_files_button['state'] = "normal"
+ctk.set_appearance_mode("Dark")
+ctk.set_default_color_theme("blue")
 
 
-def scan_selected_path():
-    global files
-    global total_files
+class App(ctk.CTk):
+    def __init__(self):
+        super().__init__()
 
-    extensions_to_process = []
+        self.core = PhotoOrganizerCore()
+        self.stop_event = threading.Event()
+        self.files_to_process = []
+        self.selected_path = ""
 
-    # código duplicado, transformar em funcao
-    for c, t in enumerate(selected_extensions):
-        if t.get():
-            extensions_to_process.append(extension_options[c])
+        self.title("Organizador de fotos")
+        self.geometry("900x650")
 
-    if len(extensions_to_process) == 0:
-        files_found_label.configure(fg="red")
-        files_found_text.set("Selecione ao menos um formato!")
-        return
+        icon_path = self.core.get_resource_path("app_icon.ico")
+        if os.path.exists(icon_path):
+            self.iconbitmap(icon_path)
 
-    final_message.set("")
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
-    files = []
-    for root, dirs, file_list in walk(selected_path):
-        for f in file_list:
-            if f.upper().endswith(tuple(extensions_to_process)):
-                files.append(join(root, f))
+        self.sidebar_frame = ctk.CTkFrame(self, width=250, corner_radius=0)
+        self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
+        self.sidebar_frame.grid_rowconfigure(6, weight=1)
 
-    total_files = len(files)
+        self.logo_label = ctk.CTkLabel(
+            self.sidebar_frame,
+            text="Configurações",
+            font=ctk.CTkFont(size=20, weight="bold"),
+        )
+        self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 5))
 
-    if total_files == 0:
-        files_found_label.configure(fg="red")
-        files_found_text.set("Não encontramos arquivos na pasta selecionada.")
-    else:
-        files_found_label.configure(fg="#008f00")
-        files_found_text.set(f"{total_files} arquivos encontrados.")
-        start_button['state'] = 'normal'
+        self.desc_label = ctk.CTkLabel(
+            self.sidebar_frame,
+            text="Renomeie e organize suas fotos/vídeos pela data original de captura.",
+            font=ctk.CTkFont(size=12),
+            text_color="gray",
+            wraplength=220,
+        )
+        self.desc_label.grid(row=1, column=0, padx=15, pady=(0, 15))
+
+        self.select_folder_btn = ctk.CTkButton(
+            self.sidebar_frame, text="Selecionar Pasta", command=self.select_folder
+        )
+        self.select_folder_btn.grid(row=2, column=0, padx=20, pady=5)
+
+        self.folder_path_label = ctk.CTkLabel(
+            self.sidebar_frame,
+            text="Nenhuma pasta selecionada",
+            text_color="gray",
+            wraplength=200,
+        )
+        self.folder_path_label.grid(row=3, column=0, padx=20, pady=(0, 10))
+
+        self.organize_year_switch = ctk.CTkSwitch(
+            self.sidebar_frame, text="Criar pastas por ano"
+        )
+        self.organize_year_switch.grid(row=4, column=0, padx=20, pady=5, sticky="w")
+
+        self.extensions_label = ctk.CTkLabel(
+            self.sidebar_frame,
+            text="Extensões:",
+            anchor="w",
+            font=ctk.CTkFont(weight="bold"),
+        )
+        self.extensions_label.grid(row=5, column=0, padx=20, pady=(10, 0), sticky="w")
+
+        self.scrollable_frame = ctk.CTkScrollableFrame(
+            self.sidebar_frame, label_text="Selecionar Tipos"
+        )
+        self.scrollable_frame.grid(
+            row=6, column=0, padx=20, pady=(5, 20), sticky="nsew"
+        )
+
+        self.check_vars = []
+        all_exts = self.core.all_extensions
+
+        self.select_all_var = ctk.IntVar(value=1)
+        self.select_all_check = ctk.CTkCheckBox(
+            self.scrollable_frame,
+            text="Selecionar Todos",
+            command=self.toggle_all,
+            variable=self.select_all_var,
+        )
+        self.select_all_check.pack(pady=5, anchor="w")
+
+        for ext in all_exts:
+            var = ctk.IntVar(value=1)
+            chk = ctk.CTkCheckBox(
+                self.scrollable_frame,
+                text=ext,
+                variable=var,
+                command=self.update_file_count,
+            )
+            chk.pack(pady=2, anchor="w")
+            self.check_vars.append((ext, var, chk))
+
+        self.main_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        self.main_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.main_frame.grid_rowconfigure(1, weight=1)
+        self.main_frame.grid_columnconfigure(0, weight=1)
+
+        self.status_header = ctk.CTkLabel(
+            self.main_frame,
+            text="Status da Organização",
+            font=ctk.CTkFont(size=24, weight="bold"),
+        )
+        self.status_header.grid(row=0, column=0, sticky="w", pady=(0, 20))
+
+        self.status_container = ctk.CTkFrame(self.main_frame)
+        self.status_container.grid(row=1, column=0, sticky="nsew")
+        self.status_container.grid_columnconfigure(0, weight=1)
+
+        self.files_found_label = ctk.CTkLabel(
+            self.status_container,
+            text="Aguardando seleção...",
+            font=ctk.CTkFont(size=16),
+        )
+        self.files_found_label.pack(pady=(40, 10))
+
+        self.current_file_label = ctk.CTkLabel(
+            self.status_container, text="", text_color="gray"
+        )
+        self.current_file_label.pack(pady=(5, 5))
+
+        self.progress_bar = ctk.CTkProgressBar(self.status_container)
+        self.progress_bar.pack(pady=10, padx=50, fill="x")
+        self.progress_bar.set(0)
+
+        self.time_info_frame = ctk.CTkFrame(
+            self.status_container, fg_color="transparent"
+        )
+        self.time_info_frame.pack(pady=(0, 20), padx=50, fill="x")
+
+        self.elapsed_label = ctk.CTkLabel(
+            self.time_info_frame, text="Decorrrido: 00:00", font=ctk.CTkFont(size=12)
+        )
+        self.elapsed_label.pack(side="left")
+
+        self.eta_label = ctk.CTkLabel(
+            self.time_info_frame, text="Restante: --:--", font=ctk.CTkFont(size=12)
+        )
+        self.eta_label.pack(side="right")
+
+        self.buttons_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.buttons_frame.grid(row=2, column=0, sticky="ew", pady=(20, 0))
+        self.buttons_frame.grid_columnconfigure(0, weight=1)
+        self.buttons_frame.grid_columnconfigure(1, weight=1)
+
+        self.start_btn = ctk.CTkButton(
+            self.buttons_frame,
+            text="INICIAR ORGANIZAÇÃO",
+            height=50,
+            font=ctk.CTkFont(size=16, weight="bold"),
+            state="disabled",
+            fg_color="green",
+            hover_color="darkgreen",
+            command=self.start_processing,
+        )
+        self.start_btn.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+
+        self.cancel_btn = ctk.CTkButton(
+            self.buttons_frame,
+            text="CANCELAR",
+            height=50,
+            font=ctk.CTkFont(size=16, weight="bold"),
+            state="disabled",
+            fg_color="darkred",
+            hover_color="#800000",
+            command=self.cancel_processing,
+        )
+        self.cancel_btn.grid(row=0, column=1, sticky="ew", padx=(10, 0))
+
+    def select_folder(self):
+        path = filedialog.askdirectory()
+        if path:
+            self.selected_path = path
+            self.folder_path_label.configure(text=path, text_color="white")
+            self.update_file_count()
+
+    def toggle_all(self):
+        val = self.select_all_var.get()
+        for _, var, _ in self.check_vars:
+            var.set(val)
+        self.update_file_count()
+
+    def update_file_count(self):
+        if not self.selected_path:
+            return
+
+        selected_exts = [ext for ext, var, _ in self.check_vars if var.get() == 1]
+        self.files_to_process = self.core.scan_directory(
+            self.selected_path, selected_exts
+        )
+
+        count = len(self.files_to_process)
+        self.files_found_label.configure(
+            text=f"{count} arquivos encontrados prontos para processar."
+        )
+
+        if count > 0:
+            self.start_btn.configure(state="normal")
+        else:
+            self.start_btn.configure(state="disabled")
+
+    def format_time(self, seconds):
+        if seconds < 0:
+            seconds = 0
+        m, s = divmod(int(seconds), 60)
+        h, m = divmod(m, 60)
+        if h > 0:
+            return f"{h:02d}:{m:02d}:{s:02d}"
+        return f"{m:02d}:{s:02d}"
+
+    def start_processing(self):
+        self.stop_event.clear()
+        self.start_btn.configure(state="disabled")
+        self.cancel_btn.configure(state="normal")
+        self.select_folder_btn.configure(state="disabled")
+        self.progress_bar.set(0)
+
+        organize_by_year = self.organize_year_switch.get() == 1
+
+        threading.Thread(
+            target=self.run_logic, args=(organize_by_year,), daemon=True
+        ).start()
+
+    def cancel_processing(self):
+        if messagebox.askyesno("Cancelar", "Deseja realmente parar o processo?"):
+            self.stop_event.set()
+            self.current_file_label.configure(
+                text="Cancelando... Aguarde terminar o arquivo atual."
+            )
+
+    def run_logic(self, organize_by_year):
+        def progress_callback(current, total, filename, elapsed, eta):
+            progress_val = current / total
+            self.progress_bar.set(progress_val)
+            self.current_file_label.configure(text=f"Processando: {filename}")
+
+            self.elapsed_label.configure(text=f"Decorrido: {self.format_time(elapsed)}")
+            self.eta_label.configure(text=f"Restante: {self.format_time(eta)}")
+
+            self.update_idletasks()
+
+        renamed_count = self.core.process_renaming(
+            self.files_to_process,
+            self.selected_path,
+            organize_by_year,
+            progress_callback,
+            self.stop_event,
+        )
+
+        self.after(0, lambda: self.finish_process(renamed_count))
+
+    def finish_process(self, count):
+        status_text = "Processo concluído!"
+        if self.stop_event.is_set():
+            status_text = "Processo cancelado pelo usuário."
+            messagebox.showwarning(
+                "Cancelado",
+                f"Operação interrompida.\n{count} arquivos foram processados antes do cancelamento.",
+            )
+        else:
+            self.current_file_label.configure(text="Concluído!")
+            messagebox.showinfo(
+                "Sucesso", f"{count} arquivos foram renomeados e organizados."
+            )
+
+        self.current_file_label.configure(text=status_text)
+        self.start_btn.configure(state="normal")
+        self.cancel_btn.configure(state="disabled")
+        self.select_folder_btn.configure(state="normal")
+        self.update_file_count()
 
 
-def process_files():
-    global progress
-    global elapsed_time
-    global current_file
-    global progress_frame
-    global progress_bar
-    global selected_extensions
-
-    extensions_to_process = []
-
-    if not exists("logs"):
-        makedirs("logs")
-
-    log_file = open(f"./logs/log-{datetime.now().strftime('%Y-%m-%d')}.txt", "a", encoding="utf-8")
-
-    for c, t in enumerate(selected_extensions):
-        if t.get():
-            extensions_to_process.append(extension_options[c])
-
-    if len(extensions_to_process) == 0:
-        final_message_label.configure(fg="red")
-        final_message.set("Selecione ao menos um formato!")
-        return
-
-    final_message.set("")
-
-    progress.set(0)
-
-    start_button['state'] = "disabled"
-    start = time()
-
-    progress_bar.configure(maximum=total_files)
-
-    files_renamed = 0
-    for file_path in files:
-        file_name = splitext(file_path)[0].split('/')[-1] + splitext(file_path)[1]
-        current_file.set(file_name)
-        current_file_label.update()
-
-        file_extension = splitext(file_path)[1]
-
-        exif = None
-        date_taken = None
-        formatted_date_taken = None
-
-        if file_extension.upper() in image_extensions:
-            file = PilImage.open(file_path)
-            
-            try:
-                exif = piexif.load(file.info['exif'])
-            except Exception as e:
-                log_file.write(e.__str__())
-                exif = None
-            finally:
-                file.close()
-
-        try: 
-            if exif:
-                if 36867 in exif.get("Exif", {}):
-                    date_taken = exif["Exif"][36867].decode('utf-8')
-                
-                if 306 in exif.get("Exif", {}):
-                    date_taken = exif["Exif"][306].decode('utf-8')
-                    
-                if date_taken and date_taken != "0000:00:00 00:00:00":
-                    formatted_date_taken = datetime.strptime(date_taken, '%Y:%m:%d %H:%M:%S')
-                    year_taken = formatted_date_taken.year
-                    formatted_date_taken = formatted_date_taken.strftime('%Y-%m-%d %H-%M-%S')
-                    
-            if not formatted_date_taken:
-                if getmtime(file_path):
-                    formatted_date_taken = datetime.fromtimestamp(getmtime(file_path)).strftime('%Y-%m-%d %H-%M-%S')
-                    year_taken = datetime.fromtimestamp(getmtime(file_path)).year
-        except Exception as e:
-            log_file.write(e.__str__())
-            messagebox.showerror("Erro", f"Ocorreu um erro inesperado.")
-            tk_root.destroy()
-
-        if formatted_date_taken:
-            new_file_folder = f'{selected_path}'
-            new_file_name = f'{formatted_date_taken}{file_extension}'
-            
-            if should_organize_photos_by_year.get():
-                new_file_folder = f'{selected_path}/{year_taken}'
-                if not exists(new_file_folder):
-                    makedirs(new_file_folder)
-            
-            repeated_file_counter = 0
-            while True:
-                try:
-                    rename(file_path, f'{new_file_folder}/{new_file_name}')
-                    files_renamed += 1
-                    break
-                except FileExistsError:
-                    repeated_file_counter += 1
-                    new_file_name = f'{formatted_date_taken} ({repeated_file_counter}){file_extension}'
-
-        tk_root.update_idletasks()
-        progress.set(progress.get() + 1)
-        
-        end = time()
-        elapsed_time.set(str(timedelta(seconds=int(end - start))))
-
-    current_file.set('')
-    current_file_label.update()
-
-    final_message_label.configure(fg='#008f00')
-    final_message.set(f"Sucesso! {files_renamed} arquivos renomeados.")
-    log_file.close()
-
-
-def toggle_all_extensions():
-    select_all = select_all_var.get()
-    for var in selected_extensions:
-        var.set(select_all)
-
-
-tk_root = Tk()
-tk_root.geometry('700x700')
-tk_root.resizable(False, False)
-tk_root.title("Organizador de fotos")
-
-# Variables
-selected_path = ''
-files_path_text = StringVar()
-files_found_text = StringVar()
-current_file = StringVar()
-files = []
-total_files = 0
-progress = DoubleVar()
-elapsed_time = StringVar()
-final_message = StringVar()
-should_organize_photos_by_year = IntVar()
-
-top_frame = Frame(tk_root)
-top_frame.pack(fill=X)
-
-settings_frame = Frame(tk_root, pady=10)
-settings_frame.pack(fill=X)
-
-progress_frame = Frame(tk_root, pady=10)
-progress_frame.pack(fill=X)
-
-current_file_label = Label(progress_frame, textvariable=current_file)
-current_file_label.pack()
-
-progress_bar_frame = Frame(progress_frame, pady=10)
-progress_bar_frame.pack()
-progress_bar = ttk.Progressbar(
-    progress_bar_frame,
-    orient='horizontal',
-    mode='determinate',
-    length=300,
-    variable=progress,
-)
-progress_bar.pack(side=LEFT, padx=10)
-Label(progress_bar_frame, textvariable=elapsed_time).pack(side=LEFT)
-
-bottom_frame = Frame(tk_root)
-bottom_frame.pack(fill=X)
-final_message_label = (Label(bottom_frame, textvariable=final_message, fg='#008f00'))
-final_message_label.pack(side=BOTTOM)
-
-start_button = Button(bottom_frame, text="Iniciar", command=lambda: process_files())
-start_button['state'] = "disabled"
-start_button.pack()
-
-Button(top_frame, text="Selecionar pasta", command=lambda: ask_files_path()).pack(pady=10)
-search_files_button = Button(settings_frame, text="Buscar arquivos", command=lambda: scan_selected_path())
-search_files_button['state'] = "disabled"
-search_files_button.pack(side=BOTTOM, pady=10)
-selected_path_label = Label(top_frame, textvariable=files_path_text)
-selected_path_label.pack()
-files_found_label = Label(settings_frame, textvariable=files_found_text, fg='#008f00')  # transformar cor em constante
-files_found_label.pack(side=BOTTOM);
-
-Checkbutton(
-    settings_frame,
-    text="Organizar as fotos em pastas por ano",
-    variable=should_organize_photos_by_year,
-    onvalue=1,
-    offvalue=0,
-    command=lambda: None,
-).pack(side=BOTTOM, pady=10)
-
-image_extensions = [".JPG", ".JPEG", ".HEIC", ".PNG", ".JFIF", ".DNG", ".WEBP"]
-video_extensions = [".MOV", ".MP4", ".AVI", ".GIF"]
-extension_options = image_extensions + video_extensions
-selected_extensions = []
-select_all_var = IntVar()
-
-Label(settings_frame, text='Quais formatos deseja organizar?', pady=10).pack()
-
-Checkbutton(
-    settings_frame,
-    text="Selecionar todos",
-    variable=select_all_var,
-    onvalue=1,
-    offvalue=0,
-    command=toggle_all_extensions,
-    font=('TkDefaultFont', 9, 'bold')
-).pack(pady=(0, 10))
-
-for i, option in enumerate(extension_options):
-    selected_extensions.append(IntVar())
-
-    Checkbutton(
-        settings_frame,
-        text=option,
-        variable=selected_extensions[i],
-        onvalue=1,
-        offvalue=0,
-        command=lambda: None,
-    ).pack()
-
-tk_root.mainloop()
+if __name__ == "__main__":
+    app = App()
+    app.mainloop()

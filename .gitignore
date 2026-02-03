@@ -4,3 +4,4 @@ dist
 .idea
 venv
 logs
+bin/ffprobe.exe
